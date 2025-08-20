@@ -34,7 +34,7 @@ export default function CameraColorGame() {
   const [countdown, setCountdown] = useState(0);
   
   // Tic Tac Toe state
-  const [gameMode, setGameMode] = useState<'colors' | 'tictactoe' | 'sudoku' | 'trivia' | 'flags' | 'patterns'>('colors');
+  const [gameMode, setGameMode] = useState<'colors' | 'tictactoe' | 'sudoku' | 'trivia' | 'flags' | 'patterns' | 'clickdot'>('colors');
   const [tictactoeBoard, setTictactoeBoard] = useState(Array(9).fill(null));
   const [tictactoeXIsNext, setTictactoeXIsNext] = useState(true);
   const [tictactoeWinner, setTictactoeWinner] = useState<string | null>(null);
@@ -92,6 +92,54 @@ export default function CameraColorGame() {
   const [patternPlaying, setPatternPlaying] = useState(false);
   const [patternActivePad, setPatternActivePad] = useState<number | null>(null);
   const [patternScore, setPatternScore] = useState(0);
+
+  // Click the Dot state
+  const [dotScore, setDotScore] = useState(0);
+  const [dotBestScore, setDotBestScore] = useState(0);
+  const [dotTimeLeft, setDotTimeLeft] = useState(30);
+  const [dotIsRunning, setDotIsRunning] = useState(false);
+  const [dotDiameter, setDotDiameter] = useState(48);
+  const [dotPosition, setDotPosition] = useState<{ x: number; y: number }>({ x: 100, y: 100 });
+  const dotContainerRef = useRef<HTMLDivElement>(null);
+  const [dotVisible, setDotVisible] = useState(false);
+  const [dotDifficulty, setDotDifficulty] = useState<'easy' | 'medium' | 'hard'>('easy');
+  const dotTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dotRespawnRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const getDotInterval = () => {
+    switch (dotDifficulty) {
+      case 'easy':
+        return 3000;
+      case 'medium':
+        return 2000;
+      case 'hard':
+        return 1000;
+    }
+  };
+
+  const clearDotTimers = () => {
+    if (dotTimeoutRef.current) {
+      clearTimeout(dotTimeoutRef.current);
+      dotTimeoutRef.current = null;
+    }
+    if (dotRespawnRef.current) {
+      clearTimeout(dotRespawnRef.current);
+      dotRespawnRef.current = null;
+    }
+  };
+
+  const scheduleDotTimers = () => {
+    clearDotTimers();
+    const interval = getDotInterval();
+    dotTimeoutRef.current = setTimeout(() => {
+      setDotVisible(false);
+      dotRespawnRef.current = setTimeout(() => {
+        placeDotRandomly();
+        setDotVisible(true);
+        scheduleDotTimers();
+      }, 300);
+    }, interval);
+  };
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -1132,6 +1180,20 @@ export default function CameraColorGame() {
     };
   }, [sudokuTimerActive, gameMode]);
 
+  // Click the Dot countdown timer
+  useEffect(() => {
+    if (gameMode !== 'clickdot') return;
+    if (!dotIsRunning) return;
+    if (dotTimeLeft <= 0) {
+      setDotIsRunning(false);
+      if (dotScore > dotBestScore) setDotBestScore(dotScore);
+      setMessage('⏱️ Time up!');
+      return;
+    }
+    const t = setTimeout(() => setDotTimeLeft((s) => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [gameMode, dotIsRunning, dotTimeLeft, dotScore, dotBestScore]);
+
   // Switch game mode
   const switchToColors = () => {
     setGameMode('colors');
@@ -1287,6 +1349,65 @@ export default function CameraColorGame() {
     setPatternRound(0);
     setPatternScore(0);
   };
+
+  const switchToClickDot = () => {
+    setGameMode('clickdot');
+    stopCamera();
+    setMessage('');
+    setIsCorrect(null);
+    setDetectedColor('');
+    setDetectionConfidence(0);
+    setIsRoundActive(false);
+    setDotIsRunning(false);
+  };
+
+  const placeDotRandomly = () => {
+    const container = dotContainerRef.current;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    const maxX = Math.max(0, rect.width - dotDiameter);
+    const maxY = Math.max(0, rect.height - dotDiameter);
+    const x = Math.floor(Math.random() * maxX);
+    const y = Math.floor(Math.random() * maxY);
+    setDotPosition({ x, y });
+  };
+
+  const startDotGame = () => {
+    setDotScore(0);
+    setDotTimeLeft(30);
+    setDotDiameter(48);
+    setDotIsRunning(true);
+    setMessage('');
+    setTimeout(() => {
+      placeDotRandomly();
+      setDotVisible(true);
+      scheduleDotTimers();
+    }, 0);
+  };
+
+  const handleDotClick = () => {
+    if (!dotIsRunning) return;
+    setDotScore((prev) => prev + 1);
+    setDotDiameter((prev) => Math.max(20, prev - 2));
+    placeDotRandomly();
+    setDotVisible(true);
+    scheduleDotTimers();
+  };
+
+  useEffect(() => {
+    // Clear timers when leaving the mode or stopping the game
+    if (gameMode !== 'clickdot' || !dotIsRunning) {
+      clearDotTimers();
+      return;
+    }
+  }, [gameMode, dotIsRunning]);
+
+  useEffect(() => {
+    // Reschedule with new difficulty interval
+    if (gameMode === 'clickdot' && dotIsRunning) {
+      scheduleDotTimers();
+    }
+  }, [dotDifficulty]);
 
   // (duplicate Pattern Memory functions removed)
 
@@ -1903,6 +2024,86 @@ export default function CameraColorGame() {
     );
   }
 
+  if (gameMode === 'clickdot') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-rose-50 to-red-100 p-8">
+        <div className="max-w-4xl mx-auto">
+          <div className="text-center mb-8">
+            <h1 className="text-4xl font-bold text-gray-800 mb-2">🔴 Click the Dot</h1>
+            <p className="text-gray-600 mb-3">Score: {dotScore} | Best: {dotBestScore} | Time: {dotTimeLeft}s</p>
+            <div className="mb-2">
+              <div className="inline-flex bg-white p-1 rounded-lg shadow">
+                {(['easy','medium','hard'] as const).map((lvl) => (
+                  <button
+                    key={lvl}
+                    onClick={() => setDotDifficulty(lvl)}
+                    className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${dotDifficulty===lvl ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                    disabled={dotIsRunning}
+                    title={lvl==='easy'?'Dot disappears every 3s':lvl==='medium'?'Every 2s':'Every 1s'}
+                  >
+                    {lvl==='easy'?'😊 Easy':lvl==='medium'?'🤔 Medium':'😈 Hard'}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {message && (
+              <div className="mt-3 p-3 bg-red-100 text-red-800 rounded-lg border border-red-300 inline-block">{message}</div>
+            )}
+          </div>
+
+          <div className="flex justify-center mb-8">
+            <div
+              ref={dotContainerRef}
+              className="relative bg-white w-80 h-80 md:w-[28rem] md:h-[28rem] rounded-xl shadow-inner border"
+            >
+              {dotIsRunning && dotVisible ? (
+                <button
+                  onClick={handleDotClick}
+                  className="absolute rounded-full shadow-lg border-2 border-white"
+                  style={{
+                    left: `${dotPosition.x}px`,
+                    top: `${dotPosition.y}px`,
+                    width: `${dotDiameter}px`,
+                    height: `${dotDiameter}px`,
+                    backgroundColor: '#ef4444'
+                  }}
+                  aria-label="Click the dot"
+                />
+              ) : (
+                <div className="absolute inset-0 flex items-center justify-center text-gray-500">
+                  <div className="text-center">
+                    <div className="text-5xl mb-2">🕹️</div>
+                    <div>Press Start to play</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="text-center space-x-4">
+            <button
+              onClick={startDotGame}
+              className="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-lg transition-colors duration-200"
+            >
+              {dotIsRunning ? '🔄 Restart' : '▶️ Start'}
+            </button>
+            <button onClick={switchToColors} className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-lg">🎨 Play Colors</button>
+          </div>
+
+          <div className="mt-12 text-center text-gray-600">
+            <h2 className="text-xl font-semibold mb-4">How to Play Click the Dot:</h2>
+            <ol className="text-left max-w-md mx-auto space-y-2">
+              <li>1. Click Start to begin a 30-second round</li>
+              <li>2. Click the red dot as fast as you can</li>
+              <li>3. The dot gets smaller after each click</li>
+              <li>4. Your best score is saved for this session</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-100 p-8">
       <div className="max-w-4xl mx-auto">
@@ -2097,6 +2298,12 @@ export default function CameraColorGame() {
           >
             🧩 Pattern Memory
           </button>
+          <button
+            onClick={switchToClickDot}
+            className="bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-6 rounded-lg transition-colors duration-200"
+          >
+            🔴 Click the Dot
+          </button>
         </div>
 
         <div className="mt-12 text-center text-gray-600">
@@ -2116,3 +2323,5 @@ export default function CameraColorGame() {
     </div>
   );
 }
+
+
