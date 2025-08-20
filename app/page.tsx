@@ -22,7 +22,10 @@ const colors = [
   { name: 'Dark Purple', hex: '#4B0082', rgb: [75, 0, 130], related: ['Purple', 'Black'] }
 ];
 
-export default function CameraColorGame() {
+export default function GameHub() {
+  const [gameMode, setGameMode] = useState<'menu' | 'colors' | 'tictactoe' | 'sudoku' | 'trivia' | 'flags' | 'patterns' | 'clickdot'>('menu');
+  
+  // Camera Color Game state
   const [targetColor, setTargetColor] = useState(colors[0]);
   const [score, setScore] = useState(0);
   const [message, setMessage] = useState('');
@@ -34,7 +37,6 @@ export default function CameraColorGame() {
   const [countdown, setCountdown] = useState(0);
   
   // Tic Tac Toe state
-  const [gameMode, setGameMode] = useState<'colors' | 'tictactoe' | 'sudoku' | 'trivia' | 'flags' | 'patterns' | 'clickdot'>('colors');
   const [tictactoeBoard, setTictactoeBoard] = useState(Array(9).fill(null));
   const [tictactoeXIsNext, setTictactoeXIsNext] = useState(true);
   const [tictactoeWinner, setTictactoeWinner] = useState<string | null>(null);
@@ -225,6 +227,8 @@ export default function CameraColorGame() {
     }
   };
 
+
+
   // Text-to-speech function
   const speakColor = (colorName: string) => {
     if ('speechSynthesis' in window) {
@@ -351,14 +355,16 @@ export default function CameraColorGame() {
     if (tictactoeBoard[i] || tictactoeWinner || aiThinking) return;
 
     const newBoard = tictactoeBoard.slice();
-    newBoard[i] = 'X'; // Player is always X
+    // Determine current player's symbol based on whose turn it is
+    const currentPlayer = tictactoeXIsNext ? 'X' : 'O';
+    newBoard[i] = currentPlayer;
     setTictactoeBoard(newBoard);
     
-    // Check if player won
+    // Check if current player won
     const winner = calculateWinner(newBoard);
     if (winner) {
       setTictactoeWinner(winner);
-      setTictactoeScore(prev => ({ ...prev, X: prev.X + 1 }));
+      setTictactoeScore(prev => ({ ...prev, [currentPlayer]: prev[currentPlayer as keyof typeof prev] + 1 }));
       return;
     }
 
@@ -391,8 +397,8 @@ export default function CameraColorGame() {
         setAiThinking(false);
       }, 100 + Math.random() * 200); // Much faster: 100-300ms delay
     } else {
-      // Two-player mode
-      setTictactoeXIsNext(false);
+      // Two-player mode - switch turns
+      setTictactoeXIsNext(!tictactoeXIsNext);
     }
   };
 
@@ -530,16 +536,23 @@ export default function CameraColorGame() {
   };
 
   const handleSudokuCellClick = (row: number, col: number) => {
-    if (sudokuBoard[row][col] === null) {
-      setSudokuSelectedCell([row, col]);
-    }
+    // Allow selecting any cell, not just empty ones
+    console.log('Cell clicked:', row, col, 'Current selected cell:', sudokuSelectedCell);
+    setSudokuSelectedCell([row, col]);
   };
 
   const handleSudokuNumberInput = (num: number) => {
     if (sudokuSelectedCell) {
       const [row, col] = sudokuSelectedCell;
+      
+      // Check if this is an original cell (cannot be changed)
+      const isOriginal = sudokuBoard[row][col] !== null && sudokuSolution[row][col] === sudokuBoard[row][col];
+      if (isOriginal) {
+        return; // Don't allow changing original cells
+      }
+      
       const newBoard = sudokuBoard.map(r => [...r]);
-      newBoard[row][col] = num;
+      newBoard[row][col] = num === 0 ? null : num; // Handle clear cell (0)
       setSudokuBoard(newBoard);
       
       // Check for errors
@@ -1012,26 +1025,26 @@ export default function CameraColorGame() {
     
   return (
       <button
-        className={`w-20 h-20 border-2 border-gray-400 text-3xl font-bold transition-all duration-200 ${
+        className={`w-20 h-20 border-2 border-accent text-3xl font-bold transition-all duration-200 ${
           isDisabled 
             ? 'cursor-not-allowed' 
-            : 'cursor-pointer hover:bg-gray-50 active:bg-gray-100'
+            : 'cursor-pointer hover:bg-gray-800 active:bg-gray-700'
         } ${
           tictactoeBoard[i] === 'X' 
-            ? 'bg-blue-100 text-blue-600 border-blue-400' 
+            ? 'bg-accent-light text-accent border-accent' 
             : tictactoeBoard[i] === 'O' 
-            ? 'bg-red-100 text-red-600 border-red-400'
+            ? 'bg-red-900 text-red-300 border-red-600'
             : isAIThinking
-            ? 'bg-yellow-100 border-yellow-400 animate-pulse'
-            : 'bg-white'
+            ? 'bg-yellow-900 border-yellow-600 animate-pulse'
+            : 'bg-dark-card'
         }`}
         onClick={() => handleTictactoeClick(i)}
         disabled={isDisabled}
-        title={isAIThinking ? 'AI is thinking...' : tictactoeBoard[i] || 'Click to place X'}
+        title={isAIThinking ? 'AI is thinking...' : tictactoeBoard[i] || `Click to place ${tictactoeXIsNext ? 'X' : 'O'}`}
       >
         {isAIThinking ? (
           <div className="flex items-center justify-center">
-            <div className="w-6 h-6 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin"></div>
+            <div className="w-6 h-6 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin"></div>
           </div>
         ) : (
           tictactoeBoard[i]
@@ -1179,6 +1192,27 @@ export default function CameraColorGame() {
       if (interval) clearInterval(interval);
     };
   }, [sudokuTimerActive, gameMode]);
+
+  // Initialize Sudoku board when component mounts
+  useEffect(() => {
+    if (gameMode === 'sudoku' && sudokuBoard.length === 0) {
+      generateSudokuPuzzle(sudokuDifficulty);
+    }
+  }, [gameMode, sudokuBoard.length, sudokuDifficulty]);
+
+  // Initialize flags data when flags game is first accessed
+  useEffect(() => {
+    if (gameMode === 'flags' && flagCountries.length === 0) {
+      fetchFlagsData();
+    }
+  }, [gameMode, flagCountries.length]);
+
+  // Initialize trivia questions when trivia game is first accessed
+  useEffect(() => {
+    if (gameMode === 'trivia' && triviaQuestions.length === 0 && !triviaLoading) {
+      fetchTriviaQuestions(triviaCategory, triviaDifficulty);
+    }
+  }, [gameMode, triviaQuestions.length, triviaLoading, triviaCategory, triviaDifficulty]);
 
   // Click the Dot countdown timer
   useEffect(() => {
@@ -1413,30 +1447,36 @@ export default function CameraColorGame() {
 
   if (gameMode === 'tictactoe') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-100 p-8">
+      <div className="min-h-screen bg-black text-white p-8">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-8">
-            <h1 className="text-4xl font-bold text-gray-800 mb-4">⭕ Tic Tac Toe vs AI</h1>
+            <button 
+              onClick={() => setGameMode('menu')}
+              className="absolute top-8 left-8 bg-accent text-white px-4 py-2 rounded-lg hover:bg-accent/80 transition-all duration-300"
+            >
+              ← Back to Menu
+            </button>
+            <h1 className="text-4xl font-bold text-accent mb-4">⭕ Tic Tac Toe {isAIGame ? 'vs AI' : '2 Players'}</h1>
             
             {/* Game Mode Toggle */}
             <div className="mb-4">
-              <div className="inline-flex bg-white rounded-lg p-1 shadow-md">
+              <div className="inline-flex bg-dark-card rounded-lg p-1 shadow-md">
                 <button
-                  onClick={toggleGameMode}
+                  onClick={() => { if (!isAIGame) toggleGameMode(); }}
                   className={`px-4 py-2 rounded-md transition-all duration-200 ${
                     isAIGame 
-                      ? 'bg-blue-500 text-white shadow-md' 
-                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      ? 'bg-accent text-white shadow-md' 
+                      : 'bg-gray-700 text-text-secondary hover:bg-gray-600'
                   }`}
                 >
                   🤖 vs AI
                 </button>
                 <button
-                  onClick={toggleGameMode}
+                  onClick={() => { if (isAIGame) toggleGameMode(); }}
                   className={`px-4 py-2 rounded-md transition-all duration-200 ${
                     !isAIGame 
-                      ? 'bg-green-500 hover:bg-green-600 text-white shadow-md' 
-                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      ? 'bg-green-600 hover:bg-green-700 text-white shadow-md' 
+                      : 'bg-gray-700 text-text-secondary hover:bg-gray-600'
                   }`}
                 >
                   👥 2 Players
@@ -1447,7 +1487,7 @@ export default function CameraColorGame() {
             {/* AI Difficulty Settings */}
             {isAIGame && (
               <div className="mb-6">
-                <p className="text-sm text-gray-600 mb-3 font-medium">🤖 AI Difficulty Level:</p>
+                <p className="text-sm text-text-secondary mb-3 font-medium">🤖 AI Difficulty Level:</p>
                 <div className="flex justify-center space-x-3">
                   {([
                     { level: 'easy', emoji: '😊', desc: 'Random moves', color: 'green' },
@@ -1459,8 +1499,8 @@ export default function CameraColorGame() {
                       onClick={() => changeDifficulty(level)}
                       className={`px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 transform hover:scale-105 ${
                         aiDifficulty === level
-                          ? `bg-${color}-500 text-white shadow-lg ring-2 ring-${color}-300`
-                          : `bg-white text-gray-700 hover:bg-${color}-50 border-2 border-${color}-200`
+                          ? `bg-${color}-600 text-white shadow-lg ring-2 ring-${color}-400`
+                          : `bg-dark-card text-text-secondary hover:bg-gray-700 border-2 border-${color}-600`
                       }`}
                       title={desc}
                     >
@@ -1475,29 +1515,31 @@ export default function CameraColorGame() {
 
             <div className="flex justify-center space-x-4 mb-4">
               <div className="text-lg">
-                <span className="font-bold text-blue-600">You (X): {tictactoeScore.X}</span>
+                <span className="font-bold text-accent">You (X): {tictactoeScore.X}</span>
               </div>
               <div className="text-lg">
-                <span className="font-bold text-red-600">
+                <span className="font-bold text-red-400">
                   {isAIGame ? 'AI (O)' : 'Player 2 (O)'}: {tictactoeScore.O}
                 </span>
               </div>
             </div>
 
-            <p className="text-lg text-gray-600 mb-4">
+            <p className="text-lg text-text-secondary mb-4">
               {tictactoeWinner 
                 ? tictactoeWinner === 'Draw' 
                   ? '🤝 It\'s a Draw!' 
                   : `🎉 ${tictactoeWinner === 'X' ? 'You won!' : isAIGame ? 'AI won!' : 'Player 2 won!'}`
                 : aiThinking 
                   ? '🤔 AI is thinking...'
-                  : `Your turn (X)`
+                  : isAIGame 
+                    ? `Your turn (X)`
+                    : `${tictactoeXIsNext ? 'Player 1' : 'Player 2'}\'s turn (${tictactoeXIsNext ? 'X' : 'O'})`
               }
             </p>
 
             {/* Message display for difficulty changes and other feedback */}
             {message && (
-              <div className="mb-4 p-3 bg-blue-100 text-blue-800 rounded-lg border border-blue-300">
+              <div className="mb-4 p-3 bg-accent-light text-accent rounded-lg border border-accent">
                 {message}
               </div>
             )}
@@ -1505,7 +1547,7 @@ export default function CameraColorGame() {
 
           {/* Game Board */}
           <div className="flex justify-center mb-8">
-            <div className="grid grid-cols-3 gap-1 bg-gray-400 p-2 rounded-lg">
+            <div className="grid grid-cols-3 gap-1 bg-accent p-2 rounded-lg">
               {renderTictactoeSquare(0)}
               {renderTictactoeSquare(1)}
               {renderTictactoeSquare(2)}
@@ -1522,20 +1564,20 @@ export default function CameraColorGame() {
           <div className="text-center space-x-4">
             <button
               onClick={resetTictactoe}
-              className="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-lg transition-colors duration-200"
+              className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition-colors duration-200"
             >
               🔄 New Game
             </button>
             <button
-              onClick={switchToColors}
-              className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-lg transition-colors duration-200"
+              onClick={() => setGameMode('menu')}
+              className="bg-accent hover:bg-accent/80 text-black font-bold py-3 px-6 rounded-lg transition-colors duration-200"
             >
-              🎨 Play Colors
+              🏠 Back to Menu
             </button>
           </div>
 
-          <div className="mt-12 text-center text-gray-600">
-            <h2 className="text-xl font-semibold mb-4">How to Play:</h2>
+          <div className="mt-12 text-center text-text-secondary">
+            <h2 className="text-xl font-semibold mb-4 text-accent">How to Play:</h2>
             <ol className="text-left max-w-md mx-auto space-y-2">
               <li>1. You play as X (Blue)</li>
               <li>2. {isAIGame ? 'AI plays as O (Red)' : 'Player 2 plays as O (Red)'}</li>
@@ -1543,7 +1585,7 @@ export default function CameraColorGame() {
               <li>4. {isAIGame ? 'Choose AI difficulty level above' : 'Take turns with your friend'}</li>
               <li>5. Click "New Game" to start over</li>
               <li>6. Switch between AI and 2-player modes</li>
-        </ol>
+            </ol>
           </div>
         </div>
       </div>
@@ -1552,14 +1594,20 @@ export default function CameraColorGame() {
 
   if (gameMode === 'sudoku') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-indigo-100 p-8">
+      <div className="min-h-screen bg-black text-white p-8">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-8">
-            <h1 className="text-4xl font-bold text-gray-800 mb-4">🔢 Sudoku Puzzle</h1>
+            <button 
+              onClick={() => setGameMode('menu')}
+              className="absolute top-8 left-8 bg-accent text-white px-4 py-2 rounded-lg hover:bg-accent/80 transition-all duration-300"
+            >
+              ← Back to Menu
+            </button>
+            <h1 className="text-4xl font-bold text-accent mb-4">🔢 Sudoku Puzzle</h1>
             
             {/* Difficulty Selection */}
             <div className="mb-6">
-              <p className="text-sm text-gray-600 mb-3 font-medium">🎯 Difficulty Level:</p>
+              <p className="text-sm text-text-secondary mb-3 font-medium">🎯 Difficulty Level:</p>
               <div className="flex justify-center space-x-3">
                 {(['easy', 'medium', 'hard'] as const).map((difficulty) => (
                   <button
@@ -1567,8 +1615,8 @@ export default function CameraColorGame() {
                     onClick={() => changeSudokuDifficulty(difficulty)}
                     className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
                       sudokuDifficulty === difficulty
-                        ? 'bg-purple-500 text-white shadow-lg'
-                        : 'bg-white text-gray-700 hover:bg-purple-50 border-2 border-purple-200'
+                        ? 'bg-accent text-white shadow-lg'
+                        : 'bg-dark-card text-text-secondary hover:bg-gray-700 border-2 border-accent'
                     }`}
                   >
                     {difficulty === 'easy' && '😊 Easy'}
@@ -1581,17 +1629,17 @@ export default function CameraColorGame() {
 
             {/* Timer and Status */}
             <div className="mb-4">
-              <div className="text-lg text-gray-600 mb-2">
+              <div className="text-lg text-text-secondary mb-2">
                 ⏱️ Time: {Math.floor(sudokuTimer / 60)}:{(sudokuTimer % 60).toString().padStart(2, '0')}
               </div>
               {sudokuCompleted && (
-                <div className="text-green-600 font-bold text-lg">🎉 Puzzle Completed!</div>
+                <div className="text-accent font-bold text-lg">🎉 Puzzle Completed!</div>
               )}
             </div>
 
             {/* Message display */}
             {message && (
-              <div className="mb-4 p-3 bg-purple-100 text-purple-800 rounded-lg border border-purple-300">
+              <div className="mb-4 p-3 bg-accent/20 text-accent border border-accent rounded-lg">
                 {message}
               </div>
             )}
@@ -1599,8 +1647,8 @@ export default function CameraColorGame() {
 
           {/* Sudoku Board */}
           <div className="flex justify-center mb-8">
-            <div className="bg-white p-4 rounded-lg shadow-lg">
-              <div className="grid grid-cols-9 gap-px bg-gray-300">
+            <div className="bg-dark-card p-4 rounded-lg shadow-lg border border-accent">
+              <div className="grid grid-cols-9 gap-px bg-accent">
                 {sudokuBoard.map((row, rowIndex) =>
                   row.map((cell, colIndex) => {
                     const isSelected = sudokuSelectedCell?.[0] === rowIndex && sudokuSelectedCell?.[1] === colIndex;
@@ -1611,18 +1659,18 @@ export default function CameraColorGame() {
                       <button
                         key={`${rowIndex}-${colIndex}`}
                         onClick={() => handleSudokuCellClick(rowIndex, colIndex)}
-                        className={`w-12 h-12 border border-gray-300 text-lg font-bold transition-all duration-200 ${
+                        className={`w-12 h-12 border border-accent text-lg font-bold transition-all duration-200 ${
                           isSelected 
-                            ? 'bg-blue-200 border-blue-500' 
+                            ? 'bg-accent text-white border-accent' 
                             : isError 
-                            ? 'bg-red-200 text-red-700' 
+                            ? 'bg-red-900 text-red-300' 
                             : isOriginal 
-                            ? 'bg-gray-100 text-gray-700 font-bold' 
-                            : 'bg-white text-blue-600 hover:bg-blue-50'
+                            ? 'bg-gray-700 text-white font-bold' 
+                            : 'bg-dark-card text-white hover:bg-gray-800'
                         } ${
-                          (rowIndex + 1) % 3 === 0 ? 'border-b-2 border-gray-400' : ''
+                          (rowIndex + 1) % 3 === 0 ? 'border-b-2 border-accent' : ''
                         } ${
-                          (colIndex + 1) % 3 === 0 ? 'border-r-2 border-gray-400' : ''
+                          (colIndex + 1) % 3 === 0 ? 'border-r-2 border-accent' : ''
                         }`}
                         disabled={isOriginal}
                       >
@@ -1631,7 +1679,7 @@ export default function CameraColorGame() {
                     );
                   })
                 )}
-        </div>
+              </div>
             </div>
           </div>
 
@@ -1643,7 +1691,7 @@ export default function CameraColorGame() {
                   key={num}
                   onClick={() => handleSudokuNumberInput(num)}
                   disabled={!sudokuSelectedCell}
-                  className="w-12 h-12 bg-blue-500 text-white text-xl font-bold rounded-lg hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                  className="w-12 h-12 bg-accent text-white text-xl font-bold rounded-lg hover:bg-accent/80 disabled:bg-gray-700 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors border-2 border-accent !border-accent disabled:!border-accent"
                 >
                   {num}
                 </button>
@@ -1652,7 +1700,7 @@ export default function CameraColorGame() {
             <button
               onClick={() => handleSudokuNumberInput(0)}
               disabled={!sudokuSelectedCell}
-              className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+              className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:bg-gray-700 disabled:cursor-not-allowed transition-colors"
             >
               Clear Cell
             </button>
@@ -1662,20 +1710,20 @@ export default function CameraColorGame() {
           <div className="text-center space-x-4">
             <button
               onClick={() => generateSudokuPuzzle(sudokuDifficulty)}
-              className="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-lg transition-colors duration-200"
+              className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition-colors duration-200"
             >
               🔄 New Puzzle
             </button>
             <button
-              onClick={switchToColors}
-              className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-lg transition-colors duration-200"
+              onClick={() => setGameMode('menu')}
+              className="bg-accent hover:bg-accent/80 text-white font-bold py-3 px-6 rounded-lg transition-colors duration-200"
             >
-              🎨 Play Colors
+              🏠 Back to Menu
             </button>
           </div>
 
-          <div className="mt-12 text-center text-gray-600">
-            <h2 className="text-xl font-semibold mb-4">How to Play Sudoku:</h2>
+          <div className="mt-12 text-center text-text-secondary">
+            <h2 className="text-xl font-semibold mb-4 text-accent">How to Play Sudoku:</h2>
             <ol className="text-left max-w-md mx-auto space-y-2">
               <li>1. Fill each row, column, and 3x3 box with numbers 1-9</li>
               <li>2. No number can repeat in the same row, column, or box</li>
@@ -1692,31 +1740,37 @@ export default function CameraColorGame() {
 
   if (gameMode === 'trivia') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-orange-50 to-red-100 p-8">
+      <div className="min-h-screen bg-black text-white p-8">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-8">
-            <h1 className="text-4xl font-bold text-gray-800 mb-4">🧠 AI-Powered Trivia Challenge</h1>
+            <button 
+              onClick={() => setGameMode('menu')}
+              className="absolute top-8 left-8 bg-accent text-white px-4 py-2 rounded-lg hover:bg-accent/80 transition-all duration-300"
+            >
+              ← Back to Menu
+            </button>
+            <h1 className="text-4xl font-bold text-accent mb-4">🧠 AI-Powered Trivia Challenge</h1>
             
             {!triviaSetupComplete ? (
               /* Voice Setup Interface */
               <div className="mb-8">
-                <div className="bg-white p-8 rounded-lg shadow-lg max-w-2xl mx-auto">
-                  <h2 className="text-2xl font-bold text-gray-800 mb-6">🎤 Let's Get to Know You!</h2>
+                <div className="bg-dark-card p-8 rounded-lg shadow-lg max-w-2xl mx-auto border border-accent">
+                  <h2 className="text-2xl font-bold text-accent mb-6">🎤 Let's Get to Know You!</h2>
                   
                   {/* Age Input */}
                   {!userAge && (
                     <div className="mb-6">
-                      <p className="text-lg text-gray-600 mb-4">
+                      <p className="text-lg text-text-secondary mb-4">
                         First, tell me your age so I can create perfect questions for you!
                       </p>
                       <button
                         onClick={startVoiceRecognition}
                         disabled={isListening}
-                        className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-blue-300 transition-colors text-lg font-medium"
+                        className="px-6 py-3 bg-accent text-white rounded-lg hover:bg-accent/80 disabled:bg-gray-700 disabled:cursor-not-allowed transition-colors text-lg font-medium"
                       >
                         {isListening ? '🎤 Listening...' : '🎤 Tell Me Your Age'}
                       </button>
-                      <p className="text-sm text-gray-500 mt-2">
+                      <p className="text-sm text-text-muted mt-2">
                         Say something like "I am 12 years old" or "I'm 25"
                       </p>
                     </div>
@@ -1725,17 +1779,17 @@ export default function CameraColorGame() {
                   {/* Subject Input */}
                   {userAge && !userSubject && (
                     <div className="mb-6">
-                      <p className="text-lg text-gray-600 mb-4">
+                      <p className="text-lg text-text-secondary mb-4">
                         Great! You're {userAge} years old. Now what subject would you like to learn about?
                       </p>
                       <button
                         onClick={startVoiceRecognition}
                         disabled={isListening}
-                        className="px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:bg-green-300 transition-colors text-lg font-medium"
+                        className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-700 disabled:cursor-not-allowed transition-colors text-lg font-medium"
                       >
                         {isListening ? '🎤 Listening...' : '🎤 Tell Me Your Subject'}
                       </button>
-                      <p className="text-sm text-gray-500 mt-2">
+                      <p className="text-sm text-text-muted mt-2">
                         Say subjects like "science", "history", "math", "animals", "space", etc.
                       </p>
                     </div>
@@ -1743,21 +1797,21 @@ export default function CameraColorGame() {
 
                   {/* Voice Message Display */}
                   {voiceMessage && (
-                    <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                      <p className="text-blue-800 font-medium">{voiceMessage}</p>
+                    <div className="mt-6 p-4 bg-accent-light border border-accent rounded-lg">
+                      <p className="text-accent font-medium">{voiceMessage}</p>
                     </div>
                   )}
 
                   {/* Manual Input Fallback */}
-                  <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-                    <p className="text-sm text-gray-600 mb-3">Or type manually:</p>
+                  <div className="mt-6 p-4 bg-gray-800 rounded-lg border border-gray-600">
+                    <p className="text-sm text-text-secondary mb-3">Or type manually:</p>
                     <div className="flex space-x-4 justify-center">
                       <input
                         type="number"
                         placeholder="Age"
                         value={userAge || ''}
                         onChange={(e) => setUserAge(parseInt(e.target.value) || null)}
-                        className="px-3 py-2 border border-gray-300 rounded-lg w-20 text-center"
+                        className="px-3 py-2 border border-gray-600 rounded-lg w-20 text-center bg-gray-700 text-white"
                         min="5"
                         max="100"
                       />
@@ -1766,12 +1820,12 @@ export default function CameraColorGame() {
                         placeholder="Subject (e.g., science)"
                         value={userSubject}
                         onChange={(e) => setUserSubject(e.target.value)}
-                        className="px-3 py-2 border border-gray-300 rounded-lg w-40"
+                        className="px-3 py-2 border border-gray-600 rounded-lg w-40 bg-gray-700 text-white"
                       />
                       <button
                         onClick={generateGeminiTrivia}
                         disabled={!userAge || !userSubject}
-                        className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 disabled:bg-gray-300 transition-colors"
+                        className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-gray-700 disabled:cursor-not-allowed transition-colors"
                       >
                         Generate Questions
                       </button>
@@ -1784,14 +1838,14 @@ export default function CameraColorGame() {
               <>
                 {/* Game Settings */}
                 <div className="mb-6">
-                  <div className="bg-white p-4 rounded-lg shadow-lg inline-block">
+                  <div className="bg-dark-card p-4 rounded-lg shadow-lg inline-block border border-accent">
                     <div className="text-center">
-                      <p className="text-lg text-gray-800 mb-2">
+                      <p className="text-lg text-accent mb-2">
                         🎯 <span className="font-bold">{userSubject.charAt(0).toUpperCase() + userSubject.slice(1)}</span> Trivia for Age <span className="font-bold">{userAge}</span>
                       </p>
                       <button
                         onClick={resetTriviaSetup}
-                        className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors text-sm"
+                        className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm"
                       >
                         🔄 Change Preferences
                       </button>
@@ -1801,14 +1855,14 @@ export default function CameraColorGame() {
 
                 {/* Score and Progress */}
                 <div className="mb-4">
-                  <div className="text-lg text-gray-600 mb-2">
+                  <div className="text-lg text-text-secondary mb-2">
                     📊 Score: {triviaScore} | Question: {currentTriviaIndex + 1}/{triviaQuestions.length}
                   </div>
                 </div>
 
                 {/* Message display */}
                 {message && (
-                  <div className="mb-4 p-3 bg-orange-100 text-orange-800 rounded-lg border border-orange-300">
+                  <div className="mb-4 p-3 bg-accent-light text-accent rounded-lg border border-accent">
                     {message}
                   </div>
                 )}
@@ -1818,12 +1872,12 @@ export default function CameraColorGame() {
 
           {/* Trivia Question */}
           {triviaSetupComplete && triviaQuestions.length > 0 && (
-            <div className="bg-white p-8 rounded-lg shadow-lg mb-8">
+            <div className="bg-dark-card p-8 rounded-lg shadow-lg mb-8 border border-accent">
               <div className="mb-6">
-                <h2 className="text-xl font-semibold text-gray-800 mb-4">
+                <h2 className="text-xl font-semibold text-accent mb-4">
                   Question {currentTriviaIndex + 1}:
                 </h2>
-                <p className="text-lg text-gray-700 leading-relaxed">
+                <p className="text-lg text-text-secondary leading-relaxed">
                   {triviaQuestions[currentTriviaIndex].question}
                 </p>
               </div>
@@ -1833,25 +1887,29 @@ export default function CameraColorGame() {
                 {[
                   triviaQuestions[currentTriviaIndex].correct_answer,
                   ...triviaQuestions[currentTriviaIndex].incorrect_answers
-                ].sort(() => Math.random() - 0.5).map((answer, index) => {
+                ].map((answer) => {
                   const isCorrect = answer === triviaQuestions[currentTriviaIndex].correct_answer;
                   const isSelected = triviaAnswered && answer === triviaQuestions[currentTriviaIndex].correct_answer;
                   
                   return (
                     <button
-                      key={index}
+                      key={answer}
                       onClick={() => handleTriviaAnswer(answer)}
                       disabled={triviaAnswered}
                       className={`p-4 text-left rounded-lg border-2 transition-all duration-200 ${
                         triviaAnswered
                           ? isCorrect
-                            ? 'bg-green-100 border-green-500 text-green-800'
-                            : 'bg-gray-100 border-gray-300 text-gray-600'
-                          : 'bg-white border-gray-300 hover:border-blue-400 hover:bg-blue-50'
+                            ? 'bg-green-900 border-green-500 text-green-300'
+                            : 'bg-gray-700 border-gray-500 text-gray-300'
+                          : 'bg-gray-800 border-gray-600 text-text-secondary hover:border-accent hover:bg-gray-700'
                       }`}
                     >
                       {answer}
-                      {triviaAnswered && isCorrect && <span className="ml-2">✅</span>}
+                      {triviaAnswered && (
+                        <span className="ml-2">
+                          {isCorrect ? '✅' : '❌'}
+                        </span>
+                      )}
                     </button>
                   );
                 })}
@@ -1861,8 +1919,8 @@ export default function CameraColorGame() {
               {triviaAnswered && (
                 <div className={`mt-6 p-4 rounded-lg text-center ${
                   triviaCorrect 
-                    ? 'bg-green-100 text-green-800 border border-green-300' 
-                    : 'bg-red-100 text-red-800 border border-red-300'
+                    ? 'bg-green-900 text-green-300 border border-green-600' 
+                    : 'bg-red-900 text-red-300 border border-red-600'
                 }`}>
                   {triviaCorrect ? '🎉 Correct!' : '❌ Wrong!'} The correct answer is: {triviaQuestions[currentTriviaIndex].correct_answer}
                 </div>
@@ -1875,21 +1933,21 @@ export default function CameraColorGame() {
             {triviaSetupComplete && (
               <button
                 onClick={generateGeminiTrivia}
-                className="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-lg transition-colors duration-200"
+                className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition-colors duration-200"
               >
                 🔄 New Game
               </button>
             )}
             <button
-              onClick={switchToColors}
-              className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-lg transition-colors duration-200"
+              onClick={() => setGameMode('menu')}
+              className="bg-accent hover:bg-accent/80 text-black font-bold py-3 px-6 rounded-lg transition-colors duration-200"
             >
-              🎨 Play Colors
+              🏠 Back to Menu
             </button>
           </div>
 
-          <div className="mt-12 text-center text-gray-600">
-            <h2 className="text-xl font-semibold mb-4">How to Play AI Trivia:</h2>
+          <div className="mt-12 text-center text-text-secondary">
+            <h2 className="text-xl font-semibold mb-4 text-accent">How to Play AI Trivia:</h2>
             <ol className="text-left max-w-md mx-auto space-y-2">
               <li>1. 🎤 Tell me your age using voice</li>
               <li>2. 🎤 Tell me what subject you want to learn</li>
@@ -1906,36 +1964,53 @@ export default function CameraColorGame() {
 
   if (gameMode === 'flags') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-rose-50 to-amber-100 p-8">
+      <div className="min-h-screen bg-black text-white p-8">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-8">
-            <h1 className="text-4xl font-bold text-gray-800 mb-4">🚩 Guess the Country by Flag</h1>
-            <p className="text-gray-600 mb-3">Score: {flagScore} | Question: {flagQuestionIndex + 1}</p>
-            <div className="mb-4">
-              <div className="inline-flex bg-white p-1 rounded-lg shadow">
+            <button 
+              onClick={() => setGameMode('menu')}
+              className="absolute top-8 left-8 bg-accent-light text-accent px-4 py-2 rounded-lg hover:bg-accent hover:text-black transition-all duration-300"
+            >
+              ← Back to Menu
+            </button>
+            <h1 className="text-4xl font-bold text-accent mb-4">🚩 Guess the Country by Flag</h1>
+            <p className="text-lg text-text-secondary mb-2">Score: {flagScore} | Question: {flagQuestionIndex + 1}</p>
+            
+            {/* Difficulty Selection */}
+            <div className="mb-6">
+              <p className="text-sm text-text-secondary mb-3 font-medium">🎯 Difficulty Level:</p>
+              <div className="flex justify-center space-x-3">
                 {(['easy','medium','hard'] as const).map((lvl) => (
                   <button
                     key={lvl}
                     onClick={() => { setFlagDifficulty(lvl); buildNextFlagQuestion(); }}
-                    className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${flagDifficulty===lvl ? 'bg-rose-500 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                    className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+                      flagDifficulty === lvl
+                        ? 'bg-accent text-black shadow-lg'
+                        : 'bg-dark-card text-text-secondary hover:bg-gray-700 border-2 border-accent'
+                    }`}
                   >
                     {lvl==='easy'?'😊 Easy':lvl==='medium'?'🤔 Medium':'😈 Hard'}
                   </button>
                 ))}
               </div>
             </div>
+
+            {/* Message display */}
             {message && (
-              <div className="mt-2 p-3 bg-orange-100 text-orange-800 rounded-lg border border-orange-300">{message}</div>
+              <div className="mb-4 p-3 bg-accent-light text-accent rounded-lg border border-accent">
+                {message}
+              </div>
             )}
           </div>
 
           <div className="flex justify-center mb-8">
             {flagLoading || !flagQuestion ? (
-              <div className="text-gray-600">Loading flags...</div>
+              <div className="text-text-secondary">Loading flags...</div>
             ) : (
-              <div className="bg-white p-6 rounded-lg shadow-lg w-full md:w-2/3">
+              <div className="bg-dark-card p-6 rounded-lg shadow-lg w-full md:w-2/3 border border-accent">
                 <div className="flex justify-center mb-6">
-                  <img src={flagQuestion.flag} alt="Flag" className="w-64 h-40 object-contain border rounded" />
+                  <img src={flagQuestion.flag} alt="Flag" className="w-64 h-40 object-contain border-2 border-accent rounded" />
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {flagQuestion.options.map((opt, idx) => {
@@ -1946,8 +2021,12 @@ export default function CameraColorGame() {
                         key={idx}
                         onClick={() => handleFlagAnswer(opt)}
                         disabled={flagAnswered}
-                        className={`p-4 rounded-lg border-2 transition-colors ${
-                          flagAnswered ? (isCorrect ? 'bg-green-100 border-green-500' : 'bg-gray-100 border-gray-300') : 'bg-white border-gray-300 hover:border-blue-400'
+                        className={`p-4 rounded-lg border-2 transition-all duration-200 ${
+                          flagAnswered 
+                            ? (isCorrect 
+                                ? 'bg-green-900 border-green-500 text-green-300' 
+                                : 'bg-gray-700 border-gray-500 text-gray-300') 
+                            : 'bg-gray-800 border-gray-600 text-text-secondary hover:border-accent hover:bg-gray-700'
                         }`}
                       >
                         {opt}
@@ -1956,7 +2035,11 @@ export default function CameraColorGame() {
                   })}
                 </div>
                 {flagAnswered && (
-                  <div className={`mt-6 p-3 rounded text-center ${flagCorrect ? 'bg-green-100 text-green-800 border border-green-300' : 'bg-red-100 text-red-800 border border-red-300'}`}>
+                  <div className={`mt-6 p-3 rounded text-center ${
+                    flagCorrect 
+                      ? 'bg-green-900 text-green-300 border border-green-600' 
+                      : 'bg-red-900 text-red-300 border border-red-600'
+                  }`}>
                     {flagCorrect ? '🎉 Correct!' : `❌ Wrong! Correct answer: ${flagQuestion.correct}`}
                   </div>
                 )}
@@ -1965,7 +2048,23 @@ export default function CameraColorGame() {
           </div>
 
           <div className="text-center space-x-4">
-            <button onClick={switchToColors} className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-lg">🎨 Play Colors</button>
+            <button 
+              onClick={() => setGameMode('menu')}
+              className="bg-accent hover:bg-accent/80 text-black font-bold py-3 px-6 rounded-lg transition-colors duration-200"
+            >
+              🏠 Back to Menu
+            </button>
+          </div>
+
+          <div className="mt-12 text-center text-text-secondary">
+            <h2 className="text-xl font-semibold mb-4 text-accent">How to Play Guess the Flag:</h2>
+            <ol className="text-left max-w-md mx-auto space-y-2">
+              <li>1. Look at the flag image above</li>
+              <li>2. Choose the correct country name from the options</li>
+              <li>3. Easy mode: Common countries only</li>
+              <li>4. Hard mode: Countries from same region</li>
+              <li>5. Your score increases with each correct answer</li>
+            </ol>
           </div>
         </div>
       </div>
@@ -1974,26 +2073,43 @@ export default function CameraColorGame() {
 
   if (gameMode === 'patterns') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-fuchsia-50 to-sky-100 p-8">
+      <div className="min-h-screen bg-black text-white p-8">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-8">
-            <h1 className="text-4xl font-bold text-gray-800 mb-2">🧩 Pattern Memory</h1>
-            <p className="text-gray-600 mb-3">Round: {patternRound} | Score: {patternScore}</p>
-            <div className="mb-4">
-              <div className="inline-flex bg-white p-1 rounded-lg shadow">
+            <button 
+              onClick={() => setGameMode('menu')}
+              className="absolute top-8 left-8 bg-accent-light text-accent px-4 py-2 rounded-lg hover:bg-accent hover:text-black transition-all duration-300"
+            >
+              ← Back to Menu
+            </button>
+            <h1 className="text-4xl font-bold text-accent mb-4">🧩 Pattern Memory</h1>
+            <p className="text-lg text-text-secondary mb-2">Round: {patternRound} | Score: {patternScore}</p>
+            
+            {/* Difficulty Selection */}
+            <div className="mb-6">
+              <p className="text-sm text-text-secondary mb-3 font-medium">🎯 Difficulty Level:</p>
+              <div className="flex justify-center space-x-3">
                 {(['easy','medium','hard'] as const).map((lvl) => (
                   <button
                     key={lvl}
                     onClick={() => setPatternDifficulty(lvl)}
-                    className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${patternDifficulty===lvl ? 'bg-fuchsia-500 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                    className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+                      patternDifficulty === lvl
+                        ? 'bg-accent text-black shadow-lg'
+                        : 'bg-dark-card text-text-secondary hover:bg-gray-700 border-2 border-accent'
+                    }`}
                   >
                     {lvl==='easy'?'😊 Easy':lvl==='medium'?'🤔 Medium':'😈 Hard'}
                   </button>
                 ))}
               </div>
             </div>
+
+            {/* Message display */}
             {message && (
-              <div className="mt-2 p-3 bg-purple-100 text-purple-800 rounded-lg border border-purple-300">{message}</div>
+              <div className="mb-4 p-3 bg-accent-light text-accent rounded-lg border border-accent">
+                {message}
+              </div>
             )}
           </div>
 
@@ -2003,9 +2119,9 @@ export default function CameraColorGame() {
                 <button
                   key={pad.id}
                   onClick={() => handlePatternPadClick(pad.id)}
-                  className="w-36 h-36 rounded-lg shadow border-2"
+                  className="w-36 h-36 rounded-lg shadow border-2 transition-all duration-200 hover:scale-105"
                   style={{
-                    backgroundColor: patternActivePad === pad.id ? pad.color : '#ffffff',
+                    backgroundColor: patternActivePad === pad.id ? pad.color : '#1f2937',
                     borderColor: pad.color
                   }}
                 >
@@ -2016,8 +2132,29 @@ export default function CameraColorGame() {
           </div>
 
           <div className="text-center space-x-4">
-            <button onClick={startPatternGame} className="bg-fuchsia-500 hover:bg-fuchsia-600 text-white font-bold py-3 px-6 rounded-lg">▶️ Start</button>
-            <button onClick={switchToColors} className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-lg">🎨 Play Colors</button>
+            <button 
+              onClick={startPatternGame} 
+              className="bg-accent hover:bg-accent/80 text-black font-bold py-3 px-6 rounded-lg transition-colors duration-200"
+            >
+              ▶️ Start
+            </button>
+            <button 
+              onClick={() => setGameMode('menu')}
+              className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-6 rounded-lg transition-colors duration-200"
+            >
+              🏠 Back to Menu
+            </button>
+          </div>
+
+          <div className="mt-12 text-center text-text-secondary">
+            <h2 className="text-xl font-semibold mb-4 text-accent">How to Play Pattern Memory:</h2>
+            <ol className="text-left max-w-md mx-auto space-y-2">
+              <li>1. Click Start to begin the game</li>
+              <li>2. Watch the color sequence carefully</li>
+              <li>3. Repeat the pattern by clicking colors in order</li>
+              <li>4. The sequence gets longer each round</li>
+              <li>5. Choose difficulty level above</li>
+            </ol>
           </div>
         </div>
       </div>
@@ -2026,18 +2163,31 @@ export default function CameraColorGame() {
 
   if (gameMode === 'clickdot') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-rose-50 to-red-100 p-8">
+      <div className="min-h-screen bg-black text-white p-8">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-8">
-            <h1 className="text-4xl font-bold text-gray-800 mb-2">🔴 Click the Dot</h1>
-            <p className="text-gray-600 mb-3">Score: {dotScore} | Best: {dotBestScore} | Time: {dotTimeLeft}s</p>
-            <div className="mb-2">
-              <div className="inline-flex bg-white p-1 rounded-lg shadow">
+            <button 
+              onClick={() => setGameMode('menu')}
+              className="absolute top-8 left-8 bg-accent-light text-accent px-4 py-2 rounded-lg hover:bg-accent hover:text-black transition-all duration-300"
+            >
+              ← Back to Menu
+            </button>
+            <h1 className="text-4xl font-bold text-accent mb-4">🔴 Click the Dot</h1>
+            <p className="text-lg text-text-secondary mb-2">Score: {dotScore} | Best: {dotBestScore} | Time: {dotTimeLeft}s</p>
+            
+            {/* Difficulty Selection */}
+            <div className="mb-6">
+              <p className="text-sm text-text-secondary mb-3 font-medium">🎯 Difficulty Level:</p>
+              <div className="flex justify-center space-x-3">
                 {(['easy','medium','hard'] as const).map((lvl) => (
                   <button
                     key={lvl}
                     onClick={() => setDotDifficulty(lvl)}
-                    className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${dotDifficulty===lvl ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                    className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+                      dotDifficulty === lvl
+                        ? 'bg-accent text-black shadow-lg'
+                        : 'bg-dark-card text-text-secondary hover:bg-gray-700 border-2 border-accent'
+                    }`}
                     disabled={dotIsRunning}
                     title={lvl==='easy'?'Dot disappears every 3s':lvl==='medium'?'Every 2s':'Every 1s'}
                   >
@@ -2046,15 +2196,19 @@ export default function CameraColorGame() {
                 ))}
               </div>
             </div>
+
+            {/* Message display */}
             {message && (
-              <div className="mt-3 p-3 bg-red-100 text-red-800 rounded-lg border border-red-300 inline-block">{message}</div>
+              <div className="mb-4 p-3 bg-accent-light text-accent rounded-lg border border-accent">
+                {message}
+              </div>
             )}
           </div>
 
           <div className="flex justify-center mb-8">
             <div
               ref={dotContainerRef}
-              className="relative bg-white w-80 h-80 md:w-[28rem] md:h-[28rem] rounded-xl shadow-inner border"
+              className="relative bg-dark-card w-80 h-80 md:w-[28rem] md:h-[28rem] rounded-xl shadow-inner border-2 border-accent"
             >
               {dotIsRunning && dotVisible ? (
                 <button
@@ -2070,7 +2224,7 @@ export default function CameraColorGame() {
                   aria-label="Click the dot"
                 />
               ) : (
-                <div className="absolute inset-0 flex items-center justify-center text-gray-500">
+                <div className="absolute inset-0 flex items-center justify-center text-text-secondary">
                   <div className="text-center">
                     <div className="text-5xl mb-2">🕹️</div>
                     <div>Press Start to play</div>
@@ -2083,20 +2237,336 @@ export default function CameraColorGame() {
           <div className="text-center space-x-4">
             <button
               onClick={startDotGame}
-              className="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-lg transition-colors duration-200"
+              className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition-colors duration-200"
             >
               {dotIsRunning ? '🔄 Restart' : '▶️ Start'}
             </button>
-            <button onClick={switchToColors} className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-lg">🎨 Play Colors</button>
+            <button 
+              onClick={() => setGameMode('menu')}
+              className="bg-accent hover:bg-accent/80 text-black font-bold py-3 px-6 rounded-lg transition-colors duration-200"
+            >
+              🏠 Back to Menu
+            </button>
           </div>
 
-          <div className="mt-12 text-center text-gray-600">
-            <h2 className="text-xl font-semibold mb-4">How to Play Click the Dot:</h2>
+          <div className="mt-12 text-center text-text-secondary">
+            <h2 className="text-xl font-semibold mb-4 text-accent">How to Play Click the Dot:</h2>
             <ol className="text-left max-w-md mx-auto space-y-2">
               <li>1. Click Start to begin a 30-second round</li>
               <li>2. Click the red dot as fast as you can</li>
               <li>3. The dot gets smaller after each click</li>
               <li>4. Your best score is saved for this session</li>
+              <li>5. Choose difficulty level above</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Main Menu
+  if (gameMode === 'menu') {
+    return (
+      <div className="min-h-screen bg-black text-white p-8">
+        <div className="max-w-6xl mx-auto">
+          {/* Robot Face SVG */}
+          <div className="flex justify-center mb-8">
+            <svg className="w-96 h-56 md:w-[500px] md:h-[300px]" viewBox="0 0 1200 700" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+              <rect width="1200" height="700" fill="black" />
+              <g stroke="#08AFC0" strokeWidth="70" strokeLinecap="round" strokeLinejoin="round" fill="none">
+                {/* Eyes group shifted down to make the face more compact */}
+                <g transform="translate(0,120)">
+                  {/* Left eye: right-pointing chevron */}
+                  <path d="M180 180 L360 120 L180 60" />
+                  {/* Right eye: left-pointing chevron */}
+                  <path d="M1020 180 L840 120 L1020 60" />
+                </g>
+                {/* Static mouth line */}
+                <line 
+                  x1="580" 
+                  y1="500" 
+                  x2="620" 
+                  y2="500"
+                  stroke="#08AFC0"
+                  strokeWidth="6"
+                  strokeLinecap="round"
+                />
+              </g>
+            </svg>
+          </div>
+
+          <div className="text-center mb-12">
+            <h1 className="text-6xl font-bold text-accent mb-4">🎮 Game Hub</h1>
+            <p className="text-xl text-text-secondary mb-2">Choose your game adventure!</p>
+            <div className="w-24 h-1 bg-accent mx-auto rounded-full"></div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
+            {/* Camera Color Detection Game */}
+            <div className="bg-dark-card rounded-xl p-6 hover:border-accent transition-all duration-300 cursor-pointer group" onClick={() => setGameMode('colors')}>
+              <div className="text-4xl mb-4 text-center">📷</div>
+              <h3 className="text-xl font-bold text-accent mb-2 text-center">Camera Color Detection</h3>
+              <p className="text-text-secondary text-center mb-4">Use your camera to find colors in the real world!</p>
+              <div className="text-center">
+                <span className="inline-block bg-accent-light text-accent px-4 py-2 rounded-lg text-sm font-medium">AI-Powered</span>
+              </div>
+            </div>
+
+            {/* Tic Tac Toe */}
+            <div className="bg-dark-card rounded-xl p-6 hover:border-accent transition-all duration-300 cursor-pointer group" onClick={() => setGameMode('tictactoe')}>
+              <div className="text-4xl mb-4 text-center">⭕</div>
+              <h3 className="text-xl font-bold text-accent mb-2 text-center">Tic Tac Toe</h3>
+              <p className="text-text-secondary text-center mb-4">Classic game with AI opponent or play with friends!</p>
+              <div className="text-center">
+                <span className="inline-block bg-accent-light text-accent px-4 py-2 rounded-lg text-sm font-medium">Strategy</span>
+              </div>
+            </div>
+
+            {/* Sudoku */}
+            <div className="bg-dark-card rounded-xl p-6 hover:border-accent transition-all duration-300 cursor-pointer group" onClick={() => setGameMode('sudoku')}>
+              <div className="text-4xl mb-4 text-center">🔢</div>
+              <h3 className="text-xl font-bold text-accent mb-2 text-center">Sudoku</h3>
+              <p className="text-text-secondary text-center mb-4">Solve number puzzles with multiple difficulty levels!</p>
+              <div className="text-center">
+                <span className="inline-block bg-accent-light text-accent px-4 py-2 rounded-lg text-sm font-medium">Logic</span>
+              </div>
+            </div>
+
+            {/* Trivia */}
+            <div className="bg-dark-card rounded-xl p-6 hover:border-accent transition-all duration-300 cursor-pointer group" onClick={() => setGameMode('trivia')}>
+              <div className="text-4xl mb-4 text-center">🧠</div>
+              <h3 className="text-xl font-bold text-accent mb-2 text-center">AI Trivia</h3>
+              <p className="text-text-secondary text-center mb-4">Test your knowledge with AI-generated questions!</p>
+              <div className="text-center">
+                <span className="inline-block bg-accent-light text-accent px-4 py-2 rounded-lg text-sm font-medium">Knowledge</span>
+              </div>
+            </div>
+
+            {/* Flags */}
+            <div className="bg-dark-card rounded-xl p-6 hover:border-accent transition-all duration-300 cursor-pointer group" onClick={() => setGameMode('flags')}>
+              <div className="text-4xl mb-4 text-center">🚩</div>
+              <h3 className="text-xl font-bold text-accent mb-2 text-center">Guess the Flag</h3>
+              <p className="text-text-secondary text-center mb-4">Learn about countries through their flags!</p>
+              <div className="text-center">
+                <span className="inline-block bg-accent-light text-accent px-4 py-2 rounded-lg text-sm font-medium">Geography</span>
+              </div>
+            </div>
+
+            {/* Pattern Memory */}
+            <div className="bg-dark-card rounded-xl p-6 hover:border-accent transition-all duration-300 cursor-pointer group" onClick={() => setGameMode('patterns')}>
+              <div className="text-4xl mb-4 text-center">🧩</div>
+              <h3 className="text-xl font-bold text-accent mb-2 text-center">Pattern Memory</h3>
+              <p className="text-text-secondary text-center mb-4">Remember and repeat color patterns!</p>
+              <div className="text-center">
+                <span className="inline-block bg-accent-light text-accent px-4 py-2 rounded-lg text-sm font-medium">Memory</span>
+              </div>
+            </div>
+
+            {/* Click the Dot */}
+            <div className="bg-dark-card rounded-xl p-6 hover:border-accent transition-all duration-300 cursor-pointer group" onClick={() => setGameMode('clickdot')}>
+              <div className="text-4xl mb-4 text-center">🔴</div>
+              <h3 className="text-xl font-bold text-accent mb-2 text-center">Click the Dot</h3>
+              <p className="text-text-secondary text-center mb-4">Test your reflexes and speed!</p>
+              <div className="text-center">
+                <span className="inline-block bg-accent-light text-accent px-4 py-2 rounded-lg text-sm font-medium">Reflexes</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="text-center">
+            <p className="text-text-muted text-sm">Built with Next.js and AI • Enjoy your gaming experience!</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Camera Color Detection Game
+  if (gameMode === 'colors') {
+    return (
+      <div className="min-h-screen bg-black text-white p-8">
+        <div className="max-w-4xl mx-auto">
+          <div className="text-center mb-8">
+            <button 
+              onClick={() => setGameMode('menu')}
+              className="absolute top-8 left-8 bg-accent-light text-accent px-4 py-2 rounded-lg hover:bg-accent hover:text-black transition-all duration-300"
+            >
+              ← Back to Menu
+            </button>
+            <h1 className="text-4xl font-bold text-accent mb-4">📷 Camera Color Detection Game</h1>
+            <p className="text-lg text-text-secondary mb-2">
+              Find this color: <span className="font-bold text-2xl" style={{ color: targetColor.hex }}>
+                {targetColor.name}
+              </span>
+            </p>
+            <p className="text-text-muted">Score: {score}</p>
+            <p className="text-sm text-text-secondary mt-2">Related colors also count! 🎯</p>
+            
+            {!isRoundActive && (
+              <div className="mt-4 p-3 bg-accent-light text-accent rounded-lg border border-accent">
+                <p className="font-semibold">🎉 Round Complete!</p>
+                <p>Next color will appear in a few seconds...</p>
+              </div>
+            )}
+          </div>
+
+          {message && (
+            <div className={`text-center mb-6 p-4 rounded-lg ${
+              isCorrect 
+                ? 'bg-green-900 text-green-100 border border-green-700' 
+                : 'bg-blue-900 text-blue-100 border border-blue-700'
+            }`}>
+              {message}
+            </div>
+          )}
+
+          <div className="flex flex-col lg:flex-row gap-8 items-center justify-center mb-8">
+            {/* Camera Feed */}
+            <div className="relative">
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className="w-80 h-60 bg-gray-800 rounded-lg border-4 border-accent shadow-lg"
+              />
+              {!isCameraActive && (
+                <div className="absolute inset-0 flex items-center justify-center bg-gray-800 rounded-lg">
+                  <div className="text-center text-text-secondary">
+                    <div className="text-4xl mb-2">📷</div>
+                    <div>Starting camera...</div>
+                  </div>
+                </div>
+              )}
+              
+              {/* Center target indicator */}
+              {isCameraActive && isRoundActive && (
+                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+                  <div className="w-8 h-8 border-2 border-white rounded-full bg-transparent"></div>
+                  <div className="w-4 h-4 border-2 border-red-500 rounded-full bg-transparent absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"></div>
+                </div>
+              )}
+
+              {/* Round status overlay */}
+              {!isRoundActive && (
+                <div className="absolute inset-0 bg-black bg-opacity-50 rounded-lg flex items-center justify-center">
+                  <div className="text-center text-white">
+                    <div className="text-2xl mb-2">⏳</div>
+                    <div className="font-semibold">Round Complete!</div>
+                    <div className="text-sm">Next color coming soon...</div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Color Analysis Panel */}
+            <div className="bg-dark-card p-6 rounded-lg shadow-lg min-w-64">
+              <h3 className="text-lg font-semibold mb-4 text-center text-accent">Color Analysis</h3>
+              
+              {isCameraActive ? (
+                <>
+                  <div className="mb-4">
+                    <p className="text-sm text-text-secondary">Detected Color:</p>
+                    <p className="font-semibold text-lg text-white">{detectedColor || 'Analyzing...'}</p>
+                  </div>
+                  
+                  <div className="mb-4">
+                    <p className="text-sm text-text-secondary">Confidence:</p>
+                    <div className="w-full bg-gray-700 rounded-full h-2">
+                      <div 
+                        className="bg-accent h-2 rounded-full transition-all duration-300"
+                        style={{ width: `${detectionConfidence}%` }}
+                      ></div>
+                    </div>
+                    <p className="text-xs text-text-muted mt-1">{detectionConfidence.toFixed(1)}%</p>
+                  </div>
+
+                  <div className="mb-4">
+                    <p className="text-sm text-text-secondary">Target Color:</p>
+                    <div 
+                      className="w-16 h-16 rounded-lg border-2 border-accent mx-auto mt-2"
+                      style={{ backgroundColor: targetColor.hex }}
+                    ></div>
+                  </div>
+
+                  <div className="mb-4">
+                    <p className="text-sm text-text-secondary">Related Colors:</p>
+                    <div className="flex flex-wrap gap-2 justify-center mt-2">
+                      {targetColor.related.map((relatedColor, index) => {
+                        const color = colors.find(c => c.name === relatedColor);
+                        return (
+                          <div 
+                            key={index}
+                            className="w-8 h-8 rounded border border-accent"
+                            style={{ backgroundColor: color?.hex }}
+                            title={relatedColor}
+                          />
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {!isRoundActive && (
+                    <div className="text-center p-3 bg-accent-light border border-accent rounded">
+                      <p className="text-sm text-accent">🎯 Round paused - next color coming soon!</p>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="text-center text-text-secondary">
+                  <div className="text-2xl mb-2">🎯</div>
+                  <p>Camera starting automatically...</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Hidden canvas for color analysis */}
+          <canvas ref={canvasRef} className="hidden" />
+
+          <div className="text-center space-x-4">
+            {isCameraActive ? (
+              <button
+                onClick={stopCamera}
+                className="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg transition-colors duration-200"
+              >
+                🛑 Stop Camera
+              </button>
+            ) : (
+              <button
+                onClick={startCamera}
+                className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition-colors duration-200"
+              >
+                📷 Start Camera
+              </button>
+            )}
+            
+            <button
+              onClick={generateNewGame}
+              className="bg-accent hover:bg-accent/80 text-black font-bold py-3 px-6 rounded-lg transition-colors duration-200"
+              disabled={!isRoundActive}
+            >
+              🎲 New Color
+            </button>
+
+            <button
+              onClick={() => setGameMode('menu')}
+              className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-6 rounded-lg transition-colors duration-200"
+            >
+              🏠 Back to Menu
+            </button>
+          </div>
+
+          <div className="mt-12 text-center text-text-secondary">
+            <h2 className="text-xl font-semibold mb-4 text-accent">How to Play:</h2>
+            <ol className="text-left max-w-md mx-auto space-y-2">
+              <li>1. Camera starts automatically (allow permissions)</li>
+              <li>2. Listen for the spoken color instruction</li>
+              <li>3. Point camera at the target color or related colors</li>
+              <li>4. Related colors also count as correct answers!</li>
+              <li>5. Wait for the 3-second delay between rounds</li>
+              <li>6. The center circle shows the detection area</li>
+              <li>7. Lower accuracy threshold for easier gameplay</li>
             </ol>
           </div>
         </div>
@@ -2105,218 +2575,137 @@ export default function CameraColorGame() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-100 p-8">
+    <div className="min-h-screen bg-black text-white p-8">
       <div className="max-w-4xl mx-auto">
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-800 mb-4">📷 Camera Color Detection Game</h1>
-          <p className="text-lg text-gray-600 mb-2">
-            Find this color: <span className="font-bold text-2xl" style={{ color: targetColor.hex }}>
-              {targetColor.name}
-            </span>
-          </p>
-          <p className="text-gray-500">Score: {score}</p>
-          <p className="text-sm text-gray-600 mt-2">Related colors also count! 🎯</p>
+          <h1 className="text-4xl font-bold text-accent mb-4">🔢 Sudoku Puzzle</h1>
           
-          {!isRoundActive && (
-            <div className="mt-4 p-3 bg-yellow-100 text-yellow-800 rounded-lg border border-yellow-300">
-              <p className="font-semibold">🎉 Round Complete!</p>
-              <p>Next color will appear in a few seconds...</p>
+          {/* Difficulty Selection */}
+          <div className="mb-6">
+            <p className="text-sm text-text-secondary mb-3 font-medium">🎯 Difficulty Level:</p>
+            <div className="flex justify-center space-x-3">
+              {(['easy', 'medium', 'hard'] as const).map((difficulty) => (
+                <button
+                  key={difficulty}
+                  onClick={() => changeSudokuDifficulty(difficulty)}
+                  className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+                    sudokuDifficulty === difficulty
+                      ? 'bg-accent text-black shadow-lg'
+                      : 'bg-dark-card text-text-secondary hover:bg-gray-700 border-2 border-accent'
+                  }`}
+                >
+                  {difficulty === 'easy' && '😊 Easy'}
+                  {difficulty === 'medium' && '🤔 Medium'}
+                  {difficulty === 'hard' && '😈 Hard'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Timer and Status */}
+          <div className="mb-4">
+            <div className="text-lg text-text-secondary mb-2">
+              ⏱️ Time: {Math.floor(sudokuTimer / 60)}:{(sudokuTimer % 60).toString().padStart(2, '0')}
+            </div>
+            {sudokuCompleted && (
+              <div className="text-accent font-bold text-lg">🎉 Puzzle Completed!</div>
+            )}
+          </div>
+
+          {/* Message display */}
+          {message && (
+            <div className="mb-4 p-3 bg-accent-light text-accent rounded-lg border border-accent">
+              {message}
             </div>
           )}
         </div>
 
-        {message && (
-          <div className={`text-center mb-6 p-4 rounded-lg ${
-            isCorrect 
-              ? 'bg-green-100 text-green-800 border border-green-300' 
-              : 'bg-blue-100 text-blue-800 border border-blue-300'
-          }`}>
-            {message}
-          </div>
-        )}
-
-        <div className="flex flex-col lg:flex-row gap-8 items-center justify-center mb-8">
-          {/* Camera Feed */}
-          <div className="relative">
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              muted
-              className="w-80 h-60 bg-gray-200 rounded-lg border-4 border-white shadow-lg"
-            />
-            {!isCameraActive && (
-              <div className="absolute inset-0 flex items-center justify-center bg-gray-200 rounded-lg">
-                <div className="text-center text-gray-500">
-                  <div className="text-4xl mb-2">📷</div>
-                  <div>Starting camera...</div>
-                </div>
-              </div>
-            )}
-            
-            {/* Center target indicator */}
-            {isCameraActive && isRoundActive && (
-              <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-                <div className="w-8 h-8 border-2 border-white rounded-full bg-transparent"></div>
-                <div className="w-4 h-4 border-2 border-red-500 rounded-full bg-transparent absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"></div>
-              </div>
-            )}
-
-            {/* Round status overlay */}
-            {!isRoundActive && (
-              <div className="absolute inset-0 bg-black bg-opacity-50 rounded-lg flex items-center justify-center">
-                <div className="text-center text-white">
-                  <div className="text-2xl mb-2">⏳</div>
-                  <div className="font-semibold">Round Complete!</div>
-                  <div className="text-sm">Next color coming soon...</div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Color Analysis Panel */}
-          <div className="bg-white p-6 rounded-lg shadow-lg min-w-64">
-            <h3 className="text-lg font-semibold mb-4 text-center">Color Analysis</h3>
-            
-            {isCameraActive ? (
-              <>
-                <div className="mb-4">
-                  <p className="text-sm text-gray-600">Detected Color:</p>
-                  <p className="font-semibold text-lg">{detectedColor || 'Analyzing...'}</p>
-                </div>
-                
-                <div className="mb-4">
-                  <p className="text-sm text-gray-600">Confidence:</p>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div 
-                      className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                      style={{ width: `${detectionConfidence}%` }}
-                    ></div>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-1">{detectionConfidence.toFixed(1)}%</p>
-                </div>
-
-                <div className="mb-4">
-                  <p className="text-sm text-gray-600">Target Color:</p>
-                  <div 
-                    className="w-16 h-16 rounded-lg border-2 border-gray-300 mx-auto mt-2"
-                    style={{ backgroundColor: targetColor.hex }}
-                  ></div>
-                </div>
-
-                <div className="mb-4">
-                  <p className="text-sm text-gray-600">Related Colors:</p>
-                  <div className="flex flex-wrap gap-2 justify-center mt-2">
-                    {targetColor.related.map((relatedColor, index) => {
-                      const color = colors.find(c => c.name === relatedColor);
-                      return (
-                        <div 
-                          key={index}
-                          className="w-8 h-8 rounded border border-gray-300"
-                          style={{ backgroundColor: color?.hex }}
-                          title={relatedColor}
-                        />
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {!isRoundActive && (
-                  <div className="text-center p-3 bg-yellow-50 border border-yellow-200 rounded">
-                    <p className="text-sm text-yellow-700">🎯 Round paused - next color coming soon!</p>
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className="text-center text-gray-500">
-                <div className="text-2xl mb-2">🎯</div>
-                <p>Camera starting automatically...</p>
-              </div>
-            )}
+        {/* Sudoku Board */}
+        <div className="flex justify-center mb-8">
+          <div className="bg-dark-card p-4 rounded-lg shadow-lg border border-accent">
+            <div className="grid grid-cols-9 gap-px bg-accent">
+              {sudokuBoard.map((row, rowIndex) =>
+                row.map((cell, colIndex) => {
+                  const isSelected = sudokuSelectedCell?.[0] === rowIndex && sudokuSelectedCell?.[1] === colIndex;
+                  const isError = sudokuErrors.has(`${rowIndex}-${colIndex}`);
+                  const isOriginal = sudokuBoard[rowIndex][colIndex] !== null && sudokuSolution[rowIndex][colIndex] === sudokuBoard[rowIndex][colIndex];
+                  
+                  return (
+                    <button
+                      key={`${rowIndex}-${colIndex}`}
+                      onClick={() => handleSudokuCellClick(rowIndex, colIndex)}
+                                              className={`w-12 h-12 border border-accent text-lg font-bold transition-all duration-200 ${
+                          isSelected 
+                            ? 'bg-accent-light border-accent text-black' 
+                            : isError 
+                            ? 'bg-red-900 text-red-300' 
+                            : isOriginal 
+                            ? 'bg-gray-700 text-white font-bold' 
+                            : 'bg-dark-card text-white hover:bg-gray-800'
+                        } ${
+                          (rowIndex + 1) % 3 === 0 ? 'border-b-2 border-accent' : ''
+                        } ${
+                          (colIndex + 1) % 3 === 0 ? 'border-r-2 border-accent' : ''
+                        }`}
+                      disabled={isOriginal}
+                    >
+                      {cell || ''}
+                    </button>
+                  );
+                })
+              )}
+      </div>
           </div>
         </div>
 
-        {/* Hidden canvas for color analysis */}
-        <canvas ref={canvasRef} className="hidden" />
+        {/* Number Input */}
+        <div className="text-center mb-8">
+          <div className="flex justify-center space-x-2 mb-4">
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
+              <button
+                key={num}
+                onClick={() => handleSudokuNumberInput(num)}
+                disabled={!sudokuSelectedCell}
+                className="w-12 h-12 bg-accent text-black text-xl font-bold rounded-lg hover:bg-accent/80 disabled:bg-gray-700 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors border-2 border-accent !border-accent disabled:!border-accent"
+              >
+                {num}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => handleSudokuNumberInput(0)}
+            disabled={!sudokuSelectedCell}
+            className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:bg-gray-700 disabled:cursor-not-allowed transition-colors"
+          >
+            Clear Cell
+          </button>
+        </div>
 
+        {/* Game Controls */}
         <div className="text-center space-x-4">
-          {isCameraActive ? (
-            <button
-              onClick={stopCamera}
-              className="bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-6 rounded-lg transition-colors duration-200"
+          <button
+            onClick={() => generateSudokuPuzzle(sudokuDifficulty)}
+            className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition-colors duration-200"
+          >
+            🔄 New Puzzle
+          </button>
+                      <button
+              onClick={() => setGameMode('menu')}
+              className="bg-accent hover:bg-accent/80 text-black font-bold py-3 px-6 rounded-lg transition-colors duration-200"
             >
-              🛑 Stop Camera
+              🏠 Back to Menu
             </button>
-          ) : (
-            <button
-              onClick={startCamera}
-              className="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-lg transition-colors duration-200"
-            >
-              📷 Start Camera
-            </button>
-          )}
-          
-          <button
-            onClick={generateNewGame}
-            className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-lg transition-colors duration-200"
-            disabled={!isRoundActive}
-          >
-            🎲 New Color
-          </button>
-
-          <button
-            onClick={switchToTictactoe}
-            className="bg-purple-500 hover:bg-purple-600 text-white font-bold py-3 px-6 rounded-lg transition-colors duration-200"
-          >
-            ⭕ Play Tic Tac Toe
-          </button>
-
-          <button
-            onClick={switchToSudoku}
-            className="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-3 px-6 rounded-lg transition-colors duration-200"
-          >
-            🔢 Play Sudoku
-          </button>
-
-          <button
-            onClick={switchToTrivia}
-            className="bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 px-6 rounded-lg transition-colors duration-200"
-          >
-            🧠 Play Trivia
-          </button>
-
-          <button
-            onClick={switchToFlags}
-            className="bg-rose-500 hover:bg-rose-600 text-white font-bold py-3 px-6 rounded-lg transition-colors duration-200"
-          >
-            🚩 Guess the Flag
-          </button>
-
-          <button
-            onClick={switchToPatterns}
-            className="bg-fuchsia-500 hover:bg-fuchsia-600 text-white font-bold py-3 px-6 rounded-lg transition-colors duration-200"
-          >
-            🧩 Pattern Memory
-          </button>
-          <button
-            onClick={switchToClickDot}
-            className="bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-6 rounded-lg transition-colors duration-200"
-          >
-            🔴 Click the Dot
-          </button>
         </div>
 
-        <div className="mt-12 text-center text-gray-600">
-          <h2 className="text-xl font-semibold mb-4">How to Play:</h2>
+        <div className="mt-12 text-center text-text-secondary">
+          <h2 className="text-xl font-semibold mb-4 text-accent">How to Play Sudoku:</h2>
           <ol className="text-left max-w-md mx-auto space-y-2">
-            <li>1. Camera starts automatically (allow permissions)</li>
-            <li>2. Listen for the spoken color instruction</li>
-            <li>3. Point camera at the target color or related colors</li>
-            <li>4. Related colors also count as correct answers!</li>
-            <li>5. Wait for the 3-second delay between rounds</li>
-            <li>6. The center circle shows the detection area</li>
-            <li>7. Lower accuracy threshold for easier gameplay</li>
-            <li>8. Switch to Tic Tac Toe for a different game!</li>
+            <li>1. Fill each row, column, and 3x3 box with numbers 1-9</li>
+            <li>2. No number can repeat in the same row, column, or box</li>
+            <li>3. Click a cell to select it, then click a number to fill it</li>
+            <li>4. Gray cells are original numbers and cannot be changed</li>
+            <li>5. Red cells indicate errors</li>
+            <li>6. Complete the puzzle to win!</li>
           </ol>
         </div>
       </div>
